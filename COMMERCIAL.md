@@ -8,7 +8,7 @@ The following are permitted under the noncommercial license at no cost:
 
 - **Personal use** — research, experiment, learning, hobby projects, evaluation
 - **Academic use** — teaching, coursework, student projects, dissertation research
-- **Public-interest organizations** — registered charities, public research institutes, government bodies, public safety / health organizations, environmental protection groups
+- **Public-interest organizations** — registered charities, public research institutes, environmental protection groups
 - **Forks and modifications** for any of the above purposes
 - **Contributions back** to this repository
 
@@ -45,13 +45,6 @@ case. Commercial licenses typically include:
 - (Optional) Custom feature work
 - (Optional) Removal of noncommercial-license attribution requirements
 
-## Trial / evaluation
-
-For-profit organizations evaluating ConstructAI for potential commercial
-adoption may use it under the noncommercial license for **up to 60 days**
-without a separate commercial license, provided no production use occurs.
-Email us before day 60 to convert to a paid agreement or stop using the
-software.
 
 ## Questions
 
