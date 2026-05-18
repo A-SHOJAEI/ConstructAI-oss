@@ -54,3 +54,18 @@ jobs:
         working-directory: apps/web
         # Threshold reflects current measured baseline. Raise as the test suite grows.
         run: npx vitest run --coverage --coverage.thresholds.lines=14
+
+  dockerfile-check:
+    name: Dockerfile check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate API Dockerfile
+        run: docker buildx build --check apps/api
+
+      - name: Validate Web Dockerfile
+        run: docker buildx build --check apps/web
