@@ -1,0 +1,15 @@
+# Required by constructai-ingress. This ConfigMap must exist in the ingress-nginx
+# namespace BEFORE the Ingress resource is deployed. The ingress-nginx controller
+# must be configured with: --set controller.config.add-headers=ingress-nginx/nginx-custom-headers
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-custom-headers
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/part-of: constructai
+data:
+  X-Content-Type-Options: "nosniff"
+  X-XSS-Protection: "0"
+  Referrer-Policy: "strict-origin-when-cross-origin"
+  Permissions-Policy: "camera=(), microphone=(), geolocation=()"

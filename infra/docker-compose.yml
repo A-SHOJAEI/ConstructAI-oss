@@ -1,0 +1,377 @@
+version: "3.9"
+
+# ---------------------------------------------------------------------------
+# ConstructAI – Full Stack Docker Compose
+#
+# Infrastructure : postgres, redis, kafka, minio, mosquitto, mediamtx
+# Application    : api, web, celery-worker, celery-beat, kafka-consumer
+#
+# Environment variables are loaded from ../.env (see env_file directives).
+# Defaults are provided where safe; secrets MUST be set via .env in prod.
+# ---------------------------------------------------------------------------
+
+x-api-common: &api-common
+  # Pin the image tag so api/celery-worker/celery-beat/kafka-consumer all
+  # share the same prebuilt image (built once, started 4 times). Without
+  # this, docker compose generates one image per service name.
+  image: constructai-api:demo
+  build:
+    context: ../apps/api
+    dockerfile: Dockerfile
+  env_file:
+    - ../.env
+  environment:
+    # Database
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-constructai}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/${POSTGRES_DB:-constructai}
+    DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-constructai}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/${POSTGRES_DB:-constructai}
+    # Redis
+    # SECURITY (H-15): Redis URL includes auth password.
+    REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}@redis:6379/0
+    # Kafka
+    KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    # S3 / MinIO
+    S3_ENDPOINT_URL: http://minio:9000
+    S3_ACCESS_KEY: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set in .env}
+    S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
+    S3_BUCKET_DOCUMENTS: ${S3_BUCKET_DOCUMENTS:-constructai-documents}
+    # MQTT
+    MQTT_BROKER_HOST: mosquitto
+    MQTT_BROKER_PORT: 1883
+    # External API keys (set in .env)
+    FRED_API_KEY: ${FRED_API_KEY:-}
+    BLS_API_KEY: ${BLS_API_KEY:-}
+    OPENWEATHERMAP_API_KEY: ${OPENWEATHERMAP_API_KEY:-}
+    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+    # Procore integration
+    PROCORE_CLIENT_ID: ${PROCORE_CLIENT_ID:-}
+    PROCORE_CLIENT_SECRET: ${PROCORE_CLIENT_SECRET:-}
+    PROCORE_REDIRECT_URI: ${PROCORE_REDIRECT_URI:-http://localhost:8000/api/v1/integrations/procore/callback}
+    PROCORE_BASE_URL: ${PROCORE_BASE_URL:-https://sandbox.procore.com}
+    PROCORE_API_URL: ${PROCORE_API_URL:-https://sandbox.procore.com/rest/v1.0}
+    PROCORE_LOGIN_URL: ${PROCORE_LOGIN_URL:-https://login.procore.com}
+    # Security
+    # SECURITY (C-07): No insecure default — JWT_SECRET_KEY must be set in .env.
+    # For local dev, generate one with: python -c "import secrets; print(secrets.token_urlsafe(64))"
+    JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in .env}
+    ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+    # ML models. Override the .env-supplied host paths to point at the
+    # in-container mount at /app/models (provided by the volume mount in the
+    # x-api-common anchor).
+    DEFECT_MODEL_PATH: /app/models/defect_vit_v1.1
+    CONSTRUCTION_EMBEDDING_MODEL_PATH: /app/models/construction-bge-large
+    SAFETY_YOLO_MODEL_PATH: /app/models/safety_yolo_v1.0/best.engine
+    COST_MODEL_PATH: ${COST_MODEL_PATH:-}
+    # LLM
+    LITELLM_FALLBACK_MODELS: ${LITELLM_FALLBACK_MODELS:-gpt-4o,claude-sonnet-4-20250514}
+    # Spark 1 vLLM via host /etc/hosts alias (forwarded to docker via
+    # extra_hosts below). Spark 2 Ollama is on the host's loopback —
+    # containers reach it via host.docker.internal.
+    LOCAL_VLLM_BASE_URL: ${LOCAL_VLLM_BASE_URL:-http://spark1:8000/v1}
+    LOCAL_VLLM_API_KEY: ${LOCAL_VLLM_API_KEY:-}
+    LOCAL_VLLM_MODEL_NAME: ${LOCAL_VLLM_MODEL_NAME:-constructai-primary}
+    LOCAL_OLLAMA_BASE_URL: http://host.docker.internal:11434/v1
+    LOCAL_OLLAMA_MODEL_NAME: ${LOCAL_OLLAMA_MODEL_NAME:-gpt-oss:20b}
+    # Observability
+    OTEL_EXPORTER_ENDPOINT: ${OTEL_EXPORTER_ENDPOINT:-}
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    kafka:
+      condition: service_healthy
+    minio:
+      condition: service_healthy
+  # Mount the host's HuggingFace cache + the locally-trained models so the
+  # API container doesn't have to redownload BGE / cross-encoder / YOLO at
+  # cold start. The host cache already has bge-reranker-v2-m3 (1.1 GB) and
+  # the construction-bge-large embedder.
+  volumes:
+    - ${HOME}/.cache/huggingface:/home/appuser/.cache/huggingface:ro
+    - ../models:/app/models:ro
+  # Map external hostnames into the container.
+  # - host.docker.internal lets us reach Ollama on the Spark 2 host loopback.
+  # - spark1 is the QSFP-direct alias for the vLLM box (resolved from /etc/hosts).
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+    - "spark1:192.168.100.1"
+
+services:
+  # =========================================================================
+  # Infrastructure
+  # =========================================================================
+
+  postgres:
+    image: timescale/timescaledb-ha:pg17
+    container_name: constructai-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-constructai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-constructai}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - constructai_pgdata:/home/postgres/pgdata/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-constructai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # SECURITY (H-15): Redis requires authentication even in development.
+  redis:
+    image: redis:7.4-alpine
+    container_name: constructai-redis
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}"]
+    ports:
+      - "127.0.0.1:16379:6379"
+    volumes:
+      - constructai_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.8.0
+    container_name: constructai-kafka
+    ports:
+      # NOTE: Host port 9092 removed — falls in Windows Hyper-V excluded range.
+      # App uses PLAINTEXT_HOST on 29092; inter-container uses internal network.
+      - "127.0.0.1:29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qk}
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  minio:
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    container_name: constructai-minio
+    ports:
+      - "127.0.0.1:19000:9000"
+      - "127.0.0.1:19001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
+    volumes:
+      - constructai_minio:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # SECURITY (H-17): MQTT has no authentication or TLS in this dev compose.
+  # In production, configure mosquitto with TLS (port 8883), username/password
+  # or client-certificate auth, and disable anonymous access. MQTT carries
+  # IoT edge safety data that must be protected in transit and authenticated.
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: constructai-mosquitto
+    ports:
+      - "127.0.0.1:1883:1883"
+      - "127.0.0.1:19883:9001"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - constructai_mosquitto:/mosquitto/data
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  mediamtx:
+    image: bluenviron/mediamtx:1.11.1
+    container_name: constructai-mediamtx
+    ports:
+      - "127.0.0.1:8554:8554"
+      - "127.0.0.1:8890:8890"
+      - "127.0.0.1:8889:8889"
+    volumes:
+      - ./mediamtx/mediamtx.yml:/mediamtx.yml
+
+  # =========================================================================
+  # Application Services
+  # =========================================================================
+
+  api:
+    <<: *api-common
+    container_name: constructai-api
+    ports:
+      - "127.0.0.1:8000:8000"
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  celery-worker:
+    <<: *api-common
+    container_name: constructai-celery-worker
+    read_only: true
+    tmpfs:
+      - /tmp
+    command: >
+      celery -A app.workers.document_worker worker
+      --loglevel=info
+      --concurrency=4
+      --queues=default,documents,scheduled
+      -n worker@%h
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.document_worker inspect ping --timeout 5 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  celery-beat:
+    <<: *api-common
+    container_name: constructai-celery-beat
+    read_only: true
+    tmpfs:
+      - /tmp
+    command: >
+      celery -A app.workers.document_worker beat
+      --loglevel=info
+      --schedule=/tmp/celerybeat-schedule
+    # Beat schedule (from document_worker.py):
+    #   - refresh-fred-prices:    daily at 14:00 UTC
+    #   - refresh-bls-ppi:        daily at 14:30 UTC
+    #   - generate-weekly-briefs: every Monday at 11:00 UTC
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/celerybeat-schedule || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  kafka-consumer:
+    <<: *api-common
+    container_name: constructai-kafka-consumer
+    read_only: true
+    tmpfs:
+      - /tmp
+    command: >
+      python -c "
+      import asyncio
+      from app.services.messaging.kafka_consumer import KafkaEventConsumer
+      from app.services.integrations.procore_webhook_processor import handle_downstream_event
+      async def main():
+          consumer = KafkaEventConsumer(
+              bootstrap_servers='kafka:9092',
+              handler=handle_downstream_event,
+          )
+          await consumer.start()
+          try:
+              await asyncio.Event().wait()
+          finally:
+              await consumer.stop()
+      asyncio.run(main())
+      "
+    # Subscribes to: constructai.events, constructai.safety,
+    #   constructai.controls, constructai.documents
+    # Routes Procore webhook events to RFI resolution agent
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import app.services.messaging.kafka_consumer' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  web:
+    # Use the standalone Dockerfile that ships pre-built .next/standalone
+    # artifacts. The in-container `npm run build` route hit a Next.js 15
+    # prerender error around /404 and /500 that didn't reproduce on host
+    # builds; running `npm run build` from apps/web first and then
+    # bundling that output into the image is more reliable.
+    image: constructai-web:demo
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile.standalone
+    container_name: constructai-web
+    # Internal-only — the proxy fronts this on port 3000.
+    expose:
+      - "3000"
+    environment:
+      # NEXT_PUBLIC_* vars must be set at build time for Next.js.
+      # At runtime the browser needs to reach the API via the host, not
+      # the Docker network name.  Set NEXT_PUBLIC_API_URL as a build arg
+      # in the web Dockerfile, or override at build:
+      #   docker compose build --build-arg NEXT_PUBLIC_API_URL=https://api.example.com web
+      NODE_ENV: production
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      # Use 127.0.0.1 (IPv4 explicit) — wget on alpine resolves localhost
+      # to ::1 (IPv6), but next-server only binds 0.0.0.0:3000.
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # Reverse proxy that owns CSP for the front-end. Generates a per-
+  # request nonce, injects it onto every <script> tag in the HTML
+  # response via sub_filter, and emits a matching Content-Security-
+  # Policy header. Without this, Next.js 15 standalone's failure to
+  # nonce its own inline hydration scripts forces 'unsafe-inline' in
+  # script-src — which we don't want.
+  web-proxy:
+    image: constructai-web-proxy:demo
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: constructai-web-proxy
+    ports:
+      - "127.0.0.1:3000:80"
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/healthz || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  constructai_pgdata:
+  constructai_redis:
+  constructai_minio:
+  constructai_mosquitto:

@@ -1,0 +1,67 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Docker container logs
+  - job_name: docker
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: docker
+          __path__: /var/log/containers/*.log
+
+    pipeline_stages:
+      - docker: {}
+      - match:
+          selector: '{job="docker"}'
+          stages:
+            - json:
+                expressions:
+                  stream: stream
+                  time: time
+                  log: log
+            - labels:
+                stream:
+            - timestamp:
+                source: time
+                format: RFC3339Nano
+            - output:
+                source: log
+
+  # API application logs
+  - job_name: api
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: constructai-api
+          service: api
+          __path__: /var/log/api/*.log
+
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+            logger: logger_name
+            message: event
+      - labels:
+          level:
+          logger:
+
+  # Web application logs
+  - job_name: web
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: constructai-web
+          service: web
+          __path__: /var/log/web/*.log

@@ -1,0 +1,28 @@
+[Unit]
+Description=ConstructAI Track B (Qwen3.5-122B-A10B SOTA)
+Documentation=https://github.com/albond/DGX_Spark_Qwen3.5-122B-A10B-AR-INT4
+After=docker.service network-online.target
+Conflicts=spark-vllm.service
+Requires=docker.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+
+# VLLM_API_KEY (and other env) is shared with Track A so the gateway
+# uses the same credential against either track.
+EnvironmentFile=/etc/spark-vllm.env
+
+# Drop FS cache before launch — Track A and B share UMA, so cleaning
+# residue from the prior Track shortens the warmup tail latency.
+ExecStartPre=/bin/sh -c '/usr/bin/sync && /bin/echo 3 > /proc/sys/vm/drop_caches'
+
+# Wrapper script avoids the systemd quoting trap on the JSON
+# --speculative-config arg. Source-of-truth for launch flags.
+ExecStart=/usr/local/bin/start-track-b.sh
+
+ExecStop=/usr/bin/docker stop -t 30 spark-vllm-track-b
+
+[Install]
+WantedBy=multi-user.target

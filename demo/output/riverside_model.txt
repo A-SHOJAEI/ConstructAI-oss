@@ -1,0 +1,13 @@
+IFC Model Placeholder
+=====================
+Install ifcopenshell to generate actual IFC4 model:
+  pip install ifcopenshell
+
+Model specification:
+  - 1 IfcSite: Riverside Mixed-Use Development Site
+  - 1 IfcBuilding: Main Building
+  - 5 IfcBuildingStorey: Levels 1-5
+  - 20 IfcWall: 4 per floor (N, S, E, W)
+  - 5 IfcSlab: 1 per floor
+  - 10 IfcColumn: 2 per floor
+  - Total elements: 36

@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  postgres-test:
+    image: timescale/timescaledb-ha:pg17
+    container_name: constructai-postgres-test
+    environment:
+      POSTGRES_USER: constructai
+      POSTGRES_PASSWORD: constructai
+      POSTGRES_DB: constructai_test
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    tmpfs:
+      - /home/postgres/pgdata/data
+
+  redis-test:
+    image: redis:7.4-alpine
+    container_name: constructai-redis-test
+    ports:
+      - "127.0.0.1:6380:6379"

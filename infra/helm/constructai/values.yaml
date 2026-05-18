@@ -1,0 +1,128 @@
+# Default values for ConstructAI Helm chart
+
+replicaCount:
+  api: 2
+  web: 2
+
+image:
+  api:
+    repository: constructai/api
+    tag: ""  # Must be overridden at deploy time (e.g. --set image.api.tag=v1.2.3)
+    pullPolicy: Always  # Use Always unless image tags are guaranteed immutable
+  web:
+    repository: constructai/web
+    tag: ""  # Must be overridden at deploy time (e.g. --set image.web.tag=v1.2.3)
+    pullPolicy: Always  # Use Always unless image tags are guaranteed immutable
+
+service:
+  api:
+    type: ClusterIP
+    port: 8000
+  web:
+    type: ClusterIP
+    port: 3000
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # ModSecurity with OWASP Core Rule Set
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    nginx.ingress.kubernetes.io/enable-owasp-modsecurity-crs: "true"
+    nginx.ingress.kubernetes.io/modsecurity-snippet: |
+      SecRuleEngine On
+      SecRequestBodyAccess On
+      SecRequestBodyLimit 52428800
+      SecResponseBodyAccess Off
+      SecAuditEngine RelevantOnly
+  hosts:
+    # IMPORTANT: Override this hostname for your environment.
+    # Example: --set ingress.hosts[0].host=app.yourdomain.com
+    - host: app.constructai.dev
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: api
+        - path: /
+          pathType: Prefix
+          service: web
+  tls:
+    - secretName: constructai-tls
+      hosts:
+        - app.constructai.dev
+
+resources:
+  api:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  web:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilization: 70
+  targetMemoryUtilization: 80
+
+env:
+  ENVIRONMENT: production
+  # SECURITY: REDIS_URL contains credentials and MUST come from a K8s Secret,
+  # not from this plain-text values file. Use an envFrom secretKeyRef or
+  # external-secrets operator to inject it. This placeholder exists only
+  # to document the required env var.
+  REDIS_URL: ""  # Override via K8s Secret (e.g. constructai-redis-secret)
+  DATABASE_URL: ""  # Set via secret
+  JWT_SECRET_KEY: ""  # Set via secret
+
+secrets:
+  # Reference existing K8s secrets
+  databaseSecret: constructai-db-credentials
+  jwtSecret: constructai-jwt-secret
+  smtpSecret: constructai-smtp-credentials
+
+postgresql:
+  enabled: false  # Use external managed database
+
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: true
+    existingSecret: constructai-redis-secret
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+  prometheusRule:
+    enabled: true
+
+networkPolicy:
+  enabled: true
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL

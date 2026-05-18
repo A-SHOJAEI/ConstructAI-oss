@@ -1,0 +1,583 @@
+version: "3.9"
+
+services:
+  # H-17 / H-20 / M-47: Validate all TLS certs BEFORE any data-plane service
+  # starts. Fails fast on missing / unreadable / expired certs so services
+  # don't silently come up with broken TLS.
+  cert-validator:
+    image: alpine:3.20
+    container_name: constructai-cert-validator
+    command: ["sh", "-c", "apk add --no-cache openssl >/dev/null && /usr/local/bin/validate-certs.sh"]
+    volumes:
+      - ./certs:/certs:ro
+      - ./scripts/validate-certs.sh:/usr/local/bin/validate-certs.sh:ro
+    restart: "no"
+    networks:
+      - backend
+
+  api:
+    image: ${API_IMAGE:-ghcr.io/constructai/constructai/api}:${IMAGE_TAG:?IMAGE_TAG must be set for production}
+    container_name: constructai-api
+    restart: always
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - ./env/production.env
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - TESTING=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4G
+        reservations:
+          cpus: "1.0"
+          memory: 1G
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    logging:
+      driver: "json-file"
+      options:
+        # H-19: capped at 60 MB/container (20m × 3) as the local backstop.
+        # Loki/Fluent Bit is the source of truth for historical logs — see
+        # docs/LOG_AGGREGATION_H19_HANDOFF.md for the shipping setup.
+        max-size: "20m"
+        max-file: "3"
+        tag: "{{.Name}}"
+    networks:
+      - backend
+      - frontend
+
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/constructai/constructai/web}:${IMAGE_TAG:?IMAGE_TAG must be set for production}
+    container_name: constructai-web
+    restart: always
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - ./env/production.env
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        # H-19: capped at 60 MB/container (20m × 3) as the local backstop.
+        # Loki/Fluent Bit is the source of truth for historical logs — see
+        # docs/LOG_AGGREGATION_H19_HANDOFF.md for the shipping setup.
+        max-size: "20m"
+        max-file: "3"
+        tag: "{{.Name}}"
+    networks:
+      - frontend
+
+  postgres:
+    image: timescale/timescaledb-ha:pg17
+    container_name: constructai-postgres
+    restart: always
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    depends_on:
+      cert-validator:
+        condition: service_completed_successfully
+    # Enable SSL/TLS for encrypted connections
+    command: >
+      -c ssl=on
+      -c ssl_cert_file=/etc/ssl/certs/server.crt
+      -c ssl_key_file=/etc/ssl/private/server.key
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-constructai}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - constructai_pgdata:/home/postgres/pgdata/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+      # Mount TLS certificates - populate with real certs in production
+      - ./certs/server.crt:/etc/ssl/certs/server.crt:ro
+      - ./certs/server.key:/etc/ssl/private/server.key:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 8G
+        reservations:
+          cpus: "2.0"
+          memory: 4G
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-constructai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        # H-19: capped at 60 MB/container (20m × 3) as the local backstop.
+        # Loki/Fluent Bit is the source of truth for historical logs — see
+        # docs/LOG_AGGREGATION_H19_HANDOFF.md for the shipping setup.
+        max-size: "20m"
+        max-file: "3"
+        tag: "{{.Name}}"
+    networks:
+      - backend
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: constructai-redis
+    restart: always
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    depends_on:
+      cert-validator:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:6380:6380"
+    volumes:
+      - constructai_redis:/data
+      # Mount TLS certificates - populate with real certs in production
+      - ./certs/server.crt:/etc/ssl/certs/server.crt:ro
+      - ./certs/server.key:/etc/ssl/private/server.key:ro
+      - ./certs/ca.crt:/etc/ssl/certs/ca.crt:ro
+    command: >
+      redis-server
+      --tls-port 6380
+      --port 0
+      --tls-cert-file /etc/ssl/certs/server.crt
+      --tls-key-file /etc/ssl/private/server.key
+      --tls-ca-cert-file /etc/ssl/certs/ca.crt
+      --appendonly yes
+      --maxmemory 1gb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+      --save 900 1
+      --save 300 10
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1536M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    environment:
+      - REDISCLI_AUTH=${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "--tls", "--cert", "/etc/ssl/certs/server.crt", "--key", "/etc/ssl/private/server.key", "--cacert", "/etc/ssl/certs/ca.crt", "-p", "6380", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        # H-19: capped at 60 MB/container (20m × 3) as the local backstop.
+        # Loki/Fluent Bit is the source of truth for historical logs — see
+        # docs/LOG_AGGREGATION_H19_HANDOFF.md for the shipping setup.
+        max-size: "20m"
+        max-file: "3"
+        tag: "{{.Name}}"
+    networks:
+      - backend
+
+  kafka-1:
+    image: confluentinc/cp-kafka:7.8.0
+    container_name: constructai-kafka-1
+    restart: always
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:9092:9092"
+      - "127.0.0.1:29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      # SECURITY: Kafka uses SASL_SSL for all inter-broker and client communication.
+      # Certificates must be provisioned before starting the cluster.
+      # See infra/certs/README.md for certificate generation instructions.
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:SASL_SSL,INTERNAL:SASL_SSL,EXTERNAL:SASL_SSL"
+      KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: "SCRAM-SHA-512"
+      KAFKA_SASL_ENABLED_MECHANISMS: "SCRAM-SHA-512"
+      # TLS certificates — must be provisioned before deployment
+      KAFKA_SSL_KEYSTORE_LOCATION: "/etc/kafka/secrets/kafka.keystore.jks"
+      KAFKA_SSL_KEYSTORE_PASSWORD: "${KAFKA_SSL_KEYSTORE_PASSWORD:?Must set KAFKA_SSL_KEYSTORE_PASSWORD}"
+      KAFKA_SSL_TRUSTSTORE_LOCATION: "/etc/kafka/secrets/kafka.truststore.jks"
+      KAFKA_SSL_TRUSTSTORE_PASSWORD: "${KAFKA_SSL_TRUSTSTORE_PASSWORD:?Must set KAFKA_SSL_TRUSTSTORE_PASSWORD}"
+      # SASL user credentials
+      KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_server_jaas.conf"
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-1:9092,EXTERNAL://localhost:29092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_RETENTION_BYTES: 10737418240
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID}
+    volumes:
+      - constructai_kafka_1:/var/lib/kafka/data
+      # TLS/SASL certificates — must be provisioned before deployment
+      - ./certs/kafka:/etc/kafka/secrets:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "1.0"
+          memory: 2G
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9092 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+        tag: "{{.Name}}"
+    networks:
+      - backend
+
+  kafka-2:
+    image: confluentinc/cp-kafka:7.8.0
+    container_name: constructai-kafka-2
+    restart: always
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:9094:9094"
+      - "127.0.0.1:29094:29094"
+    environment:
+      KAFKA_NODE_ID: 2
+      # SECURITY: See kafka-1 for SASL_SSL configuration details.
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:SASL_SSL,INTERNAL:SASL_SSL,EXTERNAL:SASL_SSL"
+      KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: "SCRAM-SHA-512"
+      KAFKA_SASL_ENABLED_MECHANISMS: "SCRAM-SHA-512"
+      KAFKA_SSL_KEYSTORE_LOCATION: "/etc/kafka/secrets/kafka.keystore.jks"
+      KAFKA_SSL_KEYSTORE_PASSWORD: "${KAFKA_SSL_KEYSTORE_PASSWORD:?Must set KAFKA_SSL_KEYSTORE_PASSWORD}"
+      KAFKA_SSL_TRUSTSTORE_LOCATION: "/etc/kafka/secrets/kafka.truststore.jks"
+      KAFKA_SSL_TRUSTSTORE_PASSWORD: "${KAFKA_SSL_TRUSTSTORE_PASSWORD:?Must set KAFKA_SSL_TRUSTSTORE_PASSWORD}"
+      KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_server_jaas.conf"
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-2:9094,EXTERNAL://localhost:29094
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_RETENTION_BYTES: 10737418240
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID}
+    volumes:
+      - constructai_kafka_2:/var/lib/kafka/data
+      - ./certs/kafka:/etc/kafka/secrets:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "1.0"
+          memory: 2G
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9094 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+        tag: "{{.Name}}"
+    networks:
+      - backend
+
+  kafka-3:
+    image: confluentinc/cp-kafka:7.8.0
+    container_name: constructai-kafka-3
+    restart: always
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:9096:9096"
+      - "127.0.0.1:29096:29096"
+    environment:
+      KAFKA_NODE_ID: 3
+      # SECURITY: See kafka-1 for SASL_SSL configuration details.
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:SASL_SSL,INTERNAL:SASL_SSL,EXTERNAL:SASL_SSL"
+      KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: "SCRAM-SHA-512"
+      KAFKA_SASL_ENABLED_MECHANISMS: "SCRAM-SHA-512"
+      KAFKA_SSL_KEYSTORE_LOCATION: "/etc/kafka/secrets/kafka.keystore.jks"
+      KAFKA_SSL_KEYSTORE_PASSWORD: "${KAFKA_SSL_KEYSTORE_PASSWORD:?Must set KAFKA_SSL_KEYSTORE_PASSWORD}"
+      KAFKA_SSL_TRUSTSTORE_LOCATION: "/etc/kafka/secrets/kafka.truststore.jks"
+      KAFKA_SSL_TRUSTSTORE_PASSWORD: "${KAFKA_SSL_TRUSTSTORE_PASSWORD:?Must set KAFKA_SSL_TRUSTSTORE_PASSWORD}"
+      KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_server_jaas.conf"
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9096,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29096
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka-3:9096,EXTERNAL://localhost:29096
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_RETENTION_BYTES: 10737418240
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID}
+    volumes:
+      - constructai_kafka_3:/var/lib/kafka/data
+      - ./certs/kafka:/etc/kafka/secrets:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "1.0"
+          memory: 2G
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9096 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+        tag: "{{.Name}}"
+    networks:
+      - backend
+
+  minio:
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    container_name: constructai-minio
+    restart: always
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:9000:9000"
+      # MinIO console port not exposed in production for security.
+      # Access the console via kubectl port-forward or a VPN if needed.
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+    volumes:
+      - constructai_minio:/data
+    command: server /data --console-address ":9001"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        # H-19: capped at 60 MB/container (20m × 3) as the local backstop.
+        # Loki/Fluent Bit is the source of truth for historical logs — see
+        # docs/LOG_AGGREGATION_H19_HANDOFF.md for the shipping setup.
+        max-size: "20m"
+        max-file: "3"
+        tag: "{{.Name}}"
+    networks:
+      - backend
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: constructai-mosquitto
+    restart: always
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    depends_on:
+      cert-validator:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8883:8883"
+    # TLS configuration: Mosquitto listens on 8883 with TLS only.
+    # The mosquitto.conf must contain:
+    #   listener 8883
+    #   certfile /mosquitto/certs/server.crt
+    #   keyfile /mosquitto/certs/server.key
+    #   cafile /mosquitto/certs/ca.crt
+    #   require_certificate false
+    #   allow_anonymous false
+    #   password_file /mosquitto/config/password_file
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - constructai_mosquitto:/mosquitto/data
+      # TLS certificates — must be provisioned before deployment
+      - ./certs/mqtt/server.crt:/mosquitto/certs/server.crt:ro
+      - ./certs/mqtt/server.key:/mosquitto/certs/server.key:ro
+      - ./certs/mqtt/ca.crt:/mosquitto/certs/ca.crt:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        # H-19: capped at 60 MB/container (20m × 3) as the local backstop.
+        # Loki/Fluent Bit is the source of truth for historical logs — see
+        # docs/LOG_AGGREGATION_H19_HANDOFF.md for the shipping setup.
+        max-size: "20m"
+        max-file: "3"
+        tag: "{{.Name}}"
+    networks:
+      - backend
+
+volumes:
+  constructai_pgdata:
+    driver: local
+  constructai_redis:
+    driver: local
+  constructai_kafka_1:
+    driver: local
+  constructai_kafka_2:
+    driver: local
+  constructai_kafka_3:
+    driver: local
+  constructai_minio:
+    driver: local
+  constructai_mosquitto:
+    driver: local
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true

@@ -1,0 +1,48 @@
+# YOLO11 config for construction safety fine-tuning
+# WARNING: AGPL-3.0 license - development/research use only
+
+# Dataset path (relative to training script)
+path: data/construction_safety
+train: images/train
+val: images/val
+test: images/test
+
+# Number of classes
+nc: 13
+
+# Class names
+names:
+  0: person
+  1: hardhat
+  2: no_hardhat
+  3: safety_vest
+  4: no_safety_vest
+  5: truck
+  6: excavator
+  7: crane
+  8: forklift
+  9: scaffolding
+  10: ladder
+  11: guardrail
+  12: barricade
+
+# Training hyperparameters
+# (override defaults for construction safety domain)
+# Recommended settings:
+#   epochs: 50
+#   batch: 16
+#   imgsz: 640
+#   patience: 10
+#   lr0: 0.01
+#   lrf: 0.01
+#   mosaic: 1.0
+#   mixup: 0.1
+#   copy_paste: 0.1
+#   degrees: 10.0
+#   translate: 0.2
+#   scale: 0.5
+#   flipud: 0.0
+#   fliplr: 0.5
+#   hsv_h: 0.015
+#   hsv_s: 0.7
+#   hsv_v: 0.4

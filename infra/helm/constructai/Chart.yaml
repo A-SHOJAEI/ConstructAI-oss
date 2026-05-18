@@ -1,0 +1,19 @@
+apiVersion: v2
+name: constructai
+description: ConstructAI - AI-Powered Construction Management Platform
+type: application
+# L-21: Chart version and appVersion are decoupled. `version` covers
+# chart-template changes (new manifests, Helm helpers, value-shape
+# changes) and follows semver on the chart itself. `appVersion` is the
+# container-image tag shipped. Bump `version` on every chart edit even
+# if the image didn't change; bump `appVersion` only when rolling a new
+# image build.
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - construction
+  - ai
+  - safety
+  - management
+maintainers:
+  - name: ConstructAI Team

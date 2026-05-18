@@ -1,0 +1,36 @@
+{{- /*
+M-44: PodDisruptionBudget for API + web workloads. Without this, a cluster
+upgrade / node drain can evict both replicas simultaneously — even with
+`maxUnavailable: 0` in the RollingUpdate strategy, voluntary disruptions
+are bounded by the PDB, not the deployment. Set `minAvailable: 1` so at
+least one pod keeps serving during drains.
+*/}}
+{{- $name := include "constructai.fullname" . }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}-api
+  labels:
+    app.kubernetes.io/name: {{ include "constructai.name" . }}
+    app.kubernetes.io/component: api
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}-api
+      app.kubernetes.io/instance: {{ .Release.Name }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}-web
+  labels:
+    app.kubernetes.io/name: {{ include "constructai.name" . }}
+    app.kubernetes.io/component: web
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}-web
+      app.kubernetes.io/instance: {{ .Release.Name }}

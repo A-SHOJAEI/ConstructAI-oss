@@ -1,0 +1,20 @@
+# MediaMTX configuration for RTSP to WebRTC bridging
+logLevel: info
+logDestinations: [stdout]
+
+api: yes
+apiAddress: :9997
+
+rtsp: yes
+rtspAddress: :8554
+
+webrtc: yes
+webrtcAddress: :8889
+
+paths:
+  all:
+    source: publisher
+    publishUser: ${MEDIAMTX_PUBLISH_USER}
+    publishPass: ${MEDIAMTX_PUBLISH_PASSWORD}
+    readUser: ${MEDIAMTX_READ_USER}
+    readPass: ${MEDIAMTX_READ_PASSWORD}

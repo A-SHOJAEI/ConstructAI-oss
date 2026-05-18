@@ -1,0 +1,134 @@
+services:
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: constructai-prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/metrics_token:/etc/prometheus/metrics_token:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-admin-api=false"
+    networks:
+      - monitoring
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: constructai-grafana
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_COOKIE_SECURE=true
+      - GF_SECURITY_STRICT_TRANSPORT_SECURITY=true
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - monitoring
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: constructai-alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    networks:
+      - monitoring
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: constructai-loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./monitoring/loki-config.yml:/etc/loki/loki-config.yml
+      - loki_data:/loki
+    command:
+      - "-config.file=/etc/loki/loki-config.yml"
+    networks:
+      - monitoring
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: constructai-promtail
+    volumes:
+      - ./monitoring/promtail-config.yml:/etc/promtail/promtail-config.yml
+      # Mount only the application log directory instead of all of /var/log
+      - /var/log/constructai:/var/log/constructai:ro
+    command:
+      - "-config.file=/etc/promtail/promtail-config.yml"
+    depends_on:
+      - loki
+    networks:
+      - monitoring
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+networks:
+  monitoring:
+    driver: bridge
+  # The backend network is defined in docker-compose.production.yml / docker-compose.yml.
+  # When deploying monitoring alongside the app, use:
+  #   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+  # If monitoring runs as a standalone stack, create the backend network externally first.
+  backend:
+    external: true
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:

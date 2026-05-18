@@ -1,0 +1,183 @@
+version: "3.9"
+
+services:
+  api:
+    image: ${API_IMAGE:-ghcr.io/constructai/constructai/api}:${IMAGE_TAG:?IMAGE_TAG must be set}
+    container_name: constructai-api
+    restart: unless-stopped
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - ./env/staging.env
+    environment:
+      - ENVIRONMENT=staging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - frontend
+      - backend
+
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/constructai/constructai/web}:${IMAGE_TAG:?IMAGE_TAG must be set}
+    container_name: constructai-web
+    restart: unless-stopped
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - ./env/staging.env
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - frontend
+
+  postgres:
+    image: timescale/timescaledb-ha:pg17
+    container_name: constructai-postgres
+    restart: unless-stopped
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-constructai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB: ${POSTGRES_DB:-constructai}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - constructai_pgdata:/home/postgres/pgdata/data
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "1.0"
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-constructai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      - backend
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: constructai-redis
+    restart: unless-stopped
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:6380:6380"
+    volumes:
+      - constructai_redis:/data
+      # Mount TLS certificates — populate with real certs for staging
+      - ./certs/server.crt:/etc/ssl/certs/server.crt:ro
+      - ./certs/server.key:/etc/ssl/private/server.key:ro
+      - ./certs/ca.crt:/etc/ssl/certs/ca.crt:ro
+    command: >
+      redis-server
+      --tls-port 6380
+      --port 0
+      --tls-cert-file /etc/ssl/certs/server.crt
+      --tls-key-file /etc/ssl/private/server.key
+      --tls-ca-cert-file /etc/ssl/certs/ca.crt
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 768M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "redis-cli", "--tls", "--cert", "/etc/ssl/certs/server.crt", "--key", "/etc/ssl/private/server.key", "--cacert", "/etc/ssl/certs/ca.crt", "-p", "6380", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - backend
+
+volumes:
+  constructai_pgdata:
+    driver: local
+  constructai_redis:
+    driver: local
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true

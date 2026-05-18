@@ -1,0 +1,86 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: constructai-ingress
+  namespace: constructai
+  labels:
+    app.kubernetes.io/part-of: constructai
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/websocket-services: constructai-api
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # SECURITY (H-22): Removed configuration-snippet (CVE-2021-25742 attack vector).
+    # Security headers are now set via standard ingress annotations and a
+    # ConfigMap-based custom-headers approach (see nginx-custom-headers ConfigMap).
+    nginx.ingress.kubernetes.io/custom-http-errors: "502,503,504"
+    nginx.ingress.kubernetes.io/server-snippets: ""
+    # Security headers via individual annotations (safe — not vulnerable to CVE-2021-25742)
+    nginx.ingress.kubernetes.io/x-frame-options: "DENY"
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    nginx.ingress.kubernetes.io/modsecurity-snippet: |
+      SecRuleEngine On
+      SecRequestBodyAccess On
+      SecRequestBodyLimit 52428800
+      SecResponseBodyAccess Off
+      SecAuditEngine RelevantOnly
+      SecAuditLog /var/log/modsec_audit.log
+    # NOTE: OWASP Core Rule Set (CRS) must be enabled in the ingress-nginx controller
+    # for full SQL injection / XSS / LFI protection. Enable via Helm values:
+    #   controller.config.enable-owasp-modsecurity-crs: "true"
+    # Without CRS, ModSecurity provides only basic request filtering.
+    # REQUIRED: The "nginx-custom-headers" ConfigMap MUST exist in the ingress-nginx
+    # namespace before deploying this Ingress. Without it, custom security headers
+    # will not be applied. Apply nginx-headers-configmap.yaml first.
+    #
+    # The ConfigMap should contain:
+    #   X-Content-Type-Options: nosniff
+    #   X-XSS-Protection: "0"
+    #   Referrer-Policy: strict-origin-when-cross-origin
+    #   Permissions-Policy: "camera=(), microphone=(), geolocation=()"
+    # Then set controller arg: --custom-http-errors and
+    # configmap flag: add-headers=ingress-nginx/nginx-custom-headers
+    #
+    # Sample ConfigMap definition (also provided in nginx-headers-configmap.yaml):
+    # ---
+    # apiVersion: v1
+    # kind: ConfigMap
+    # metadata:
+    #   name: nginx-custom-headers
+    #   namespace: ingress-nginx
+    # data:
+    #   X-Content-Type-Options: "nosniff"
+    #   X-XSS-Protection: "0"
+    #   Referrer-Policy: "strict-origin-when-cross-origin"
+    #   Permissions-Policy: "camera=(), microphone=(), geolocation=()"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - app.constructai.io
+        - api.constructai.io
+      secretName: constructai-tls
+  rules:
+    - host: api.constructai.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: constructai-api
+                port:
+                  name: http
+    - host: app.constructai.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: constructai-web
+                port:
+                  name: http

@@ -1,0 +1,41 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ["alertname", "severity"]
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: "default"
+  routes:
+    - match:
+        severity: critical
+      receiver: "pagerduty"
+    - match:
+        severity: warning
+      receiver: "opsgenie"
+
+# H-22: Secrets are read from files mounted by Docker secrets (or K8s
+# secrets via projected volume) rather than templated `${VAR}` placeholders.
+# Alertmanager 0.26+ honors the `_file` suffix on every credential field, so
+# there's no envsubst step to forget and no plaintext secret in the rendered
+# config on disk.
+#
+# Expected mount points (production compose / K8s):
+#   /etc/alertmanager/secrets/webhook_url        (default receiver)
+#   /etc/alertmanager/secrets/pagerduty_key      (critical receiver)
+#   /etc/alertmanager/secrets/opsgenie_key       (warning receiver)
+receivers:
+  - name: "default"
+    webhook_configs:
+      - url_file: "/etc/alertmanager/secrets/webhook_url"
+
+  - name: "pagerduty"
+    pagerduty_configs:
+      - routing_key_file: "/etc/alertmanager/secrets/pagerduty_key"
+        severity: critical
+
+  - name: "opsgenie"
+    opsgenie_configs:
+      - api_key_file: "/etc/alertmanager/secrets/opsgenie_key"
+        priority: P2

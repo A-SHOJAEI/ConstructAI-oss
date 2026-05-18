@@ -1,0 +1,40 @@
+# Development artifacts
+node_modules/
+.next/*
+!.next/standalone
+!.next/static
+out/
+coverage/
+
+# Tests
+tests/
+*.test.ts
+*.test.tsx
+__tests__/
+playwright-report/
+test-results/
+
+# IDE and misc
+.idea/
+.vscode/
+.env
+.env.*
+*.md
+!README.md
+
+# Git
+.git/
+.gitignore
+
+# L-19: Prevent accidental credential inclusion.
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+credentials.json
+service-account*.json
+.aws/
+.gcp/
+.ssh/
+.netrc

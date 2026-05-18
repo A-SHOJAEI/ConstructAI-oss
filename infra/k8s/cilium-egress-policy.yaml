@@ -1,0 +1,75 @@
+# CiliumNetworkPolicy for FQDN-restricted HTTPS egress from the API pod.
+# Replaces the overly permissive "allow any port 443" rule in network-policy.yaml.
+#
+# Prerequisites:
+#   - Cilium must be installed as the CNI in the cluster
+#   - Standard NetworkPolicy egress port 443 rule should be removed once this is applied
+#
+# Usage:
+#   kubectl apply -f cilium-egress-policy.yaml
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-api-external-https
+  namespace: constructai
+  labels:
+    app.kubernetes.io/part-of: constructai
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  egress:
+    # LLM Providers
+    - toFQDNs:
+        - matchName: "api.openai.com"
+        - matchName: "api.anthropic.com"
+        - matchName: "generativelanguage.googleapis.com"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # Embeddings & Reranking
+    - toFQDNs:
+        - matchName: "api.cohere.ai"
+        - matchName: "api.voyageai.com"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # Economic & Labor Data APIs
+    - toFQDNs:
+        - matchName: "api.fred.stlouisfed.org"
+        - matchName: "api.bls.gov"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # Procore Integration
+    - toFQDNs:
+        - matchName: "login.procore.com"
+        - matchName: "sandbox.procore.com"
+        - matchName: "app.procore.com"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # Weather APIs
+    - toFQDNs:
+        - matchName: "api.open-meteo.com"
+        - matchName: "api.openweathermap.org"
+        - matchName: "api.weather.gov"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    # SSO Providers (Google & Microsoft)
+    - toFQDNs:
+        - matchName: "accounts.google.com"
+        - matchName: "oauth2.googleapis.com"
+        - matchName: "login.microsoftonline.com"
+        - matchName: "graph.microsoft.com"
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

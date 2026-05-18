@@ -1,0 +1,38 @@
+# NvMultiObjectTracker configuration
+%YAML:1.0
+
+BaseConfig:
+  minDetectorConfidence: 0.4
+  minTrackerConfidence: 0.5
+  minMatchingScore4Overall: 0.3
+  minTrailLengthForVehicleCounting: 5
+  gpuID: 0
+
+TargetManagement:
+  enableBBoxUnClipping: 1
+  maxTargetsPerStream: 150
+  minIouDiff4NewTarget: 0.5
+  preserveStreamUpdateOrder: 0
+  maxShadowTrackingAge: 30
+  probationAge: 3
+  earlyTerminationAge: 1
+
+TrajectoryManagement:
+  useUniqueID: 0
+
+DataAssociator:
+  dataAssociatorType: 0
+  associationMatcherType: 1
+  checkClassMatch: 1
+
+  minMatchingScore4Overall: 0.3
+  minMatchingScore4SizeSimilarity: 0.5
+  minMatchingScore4Appearance: 0.3
+
+  matchingScoreWeight4SizeSimilarity: 60.0
+  matchingScoreWeight4Appearance: 40.0
+
+StateEstimator:
+  stateEstimatorType: 2
+  noiseWeightVar4Loc: 0.05
+  noiseWeightVar4Vel: 0.00625

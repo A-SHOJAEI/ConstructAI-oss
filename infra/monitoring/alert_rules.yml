@@ -1,0 +1,231 @@
+groups:
+  - name: system_health
+    interval: 30s
+    rules:
+      - alert: ApiErrorRateHigh
+        expr: >
+          (
+            sum(rate(constructai_agent_errors_total[5m]))
+            /
+            sum(rate(constructai_http_requests_total[5m]))
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "API error rate exceeds 5%"
+          description: >
+            The API error rate is {{ $value | humanizePercentage }} over the
+            last 5 minutes, which exceeds the 5% threshold.
+          runbook_url: "https://wiki.constructai.internal/runbooks/api-error-rate"
+
+      - alert: SlowResponseTime
+        expr: >
+          histogram_quantile(0.95,
+            sum(rate(constructai_agent_latency_seconds_bucket[5m])) by (le)
+          ) > 3.0
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Agent response P95 latency exceeds 3 seconds"
+          description: >
+            The 95th percentile agent response time is {{ $value | humanizeDuration }},
+            which exceeds the 3-second threshold.
+          runbook_url: "https://wiki.constructai.internal/runbooks/slow-response"
+
+      - alert: CameraStreamsDown
+        expr: constructai_active_camera_streams == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "All camera streams are down"
+          description: >
+            Active camera stream count has dropped to zero.
+            Site monitoring is offline.
+          runbook_url: "https://wiki.constructai.internal/runbooks/camera-streams"
+
+  - name: agent_performance
+    interval: 30s
+    rules:
+      - alert: AgentFailureRateHigh
+        expr: >
+          (
+            sum by (agent_name)(rate(constructai_agent_errors_total[5m]))
+            /
+            sum by (agent_name)(rate(constructai_http_requests_total[5m]))
+          ) > 0.10
+        for: 3m
+        labels:
+          severity: warning
+          team: ml
+        annotations:
+          summary: "Agent {{ $labels.agent_name }} failure rate exceeds 10%"
+          description: >
+            Agent {{ $labels.agent_name }} has a failure rate of
+            {{ $value | humanizePercentage }} over the last 5 minutes.
+          runbook_url: "https://wiki.constructai.internal/runbooks/agent-failures"
+
+      - alert: InferenceLatencyHigh
+        expr: >
+          histogram_quantile(0.95,
+            sum(rate(constructai_inference_latency_seconds_bucket[5m])) by (le, model_name)
+          ) > 5.0
+        for: 5m
+        labels:
+          severity: warning
+          team: ml
+        annotations:
+          summary: "ML inference P95 latency exceeds 5 seconds"
+          description: >
+            Model {{ $labels.model_name }} inference P95 is
+            {{ $value | humanizeDuration }}, exceeding the 5-second threshold.
+          runbook_url: "https://wiki.constructai.internal/runbooks/inference-latency"
+
+      - alert: KafkaConsumerLagHigh
+        expr: constructai_kafka_consumer_lag > 1000
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Kafka consumer lag exceeds 1000 on topic {{ $labels.topic }}"
+          description: >
+            Consumer group for topic {{ $labels.topic }} has a lag of
+            {{ $value }} messages, exceeding the 1000-message threshold.
+          runbook_url: "https://wiki.constructai.internal/runbooks/kafka-lag"
+
+  - name: security
+    interval: 30s
+    rules:
+      - alert: HighAuthFailureRate
+        expr: rate(auth_login_failed_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "High authentication failure rate"
+          description: >
+            Authentication failure rate is {{ $value | humanize }} per second
+            over the last 5 minutes, exceeding the threshold of 10/s.
+          runbook_url: "https://wiki.constructai.internal/runbooks/auth-failure-rate"
+
+      - alert: UnusualAPIErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "Unusual 5xx error rate detected"
+          description: >
+            The 5xx error rate is {{ $value | humanize }} per second,
+            which may indicate an attack or system compromise.
+          runbook_url: "https://wiki.constructai.internal/runbooks/unusual-error-rate"
+
+  - name: infrastructure
+    interval: 30s
+    rules:
+      - alert: DiskSpaceLow
+        expr: >
+          (
+            (node_filesystem_size_bytes - node_filesystem_avail_bytes)
+            / node_filesystem_size_bytes
+          ) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Disk usage exceeds 80% on {{ $labels.instance }}"
+          description: >
+            Filesystem {{ $labels.mountpoint }} on {{ $labels.instance }} is
+            {{ $value | humanize }}% full.
+          runbook_url: "https://wiki.constructai.internal/runbooks/disk-space"
+
+      - alert: DiskSpaceCritical
+        expr: >
+          (
+            (node_filesystem_size_bytes - node_filesystem_avail_bytes)
+            / node_filesystem_size_bytes
+          ) * 100 > 95
+        for: 5m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Disk usage exceeds 95% on {{ $labels.instance }}"
+          description: >
+            Filesystem {{ $labels.mountpoint }} on {{ $labels.instance }} is
+            {{ $value | humanize }}% full. Immediate action required.
+          runbook_url: "https://wiki.constructai.internal/runbooks/disk-space-critical"
+
+      - alert: MemoryUsageHigh
+        expr: >
+          (
+            (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)
+            / node_memory_MemTotal_bytes
+          ) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Memory usage exceeds 85% on {{ $labels.instance }}"
+          description: >
+            Memory usage on {{ $labels.instance }} is {{ $value | humanize }}%.
+          runbook_url: "https://wiki.constructai.internal/runbooks/memory-usage"
+
+      - alert: MemoryUsageCritical
+        expr: >
+          (
+            (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)
+            / node_memory_MemTotal_bytes
+          ) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Memory usage exceeds 95% on {{ $labels.instance }}"
+          description: >
+            Memory usage on {{ $labels.instance }} is {{ $value | humanize }}%.
+            OOM risk is imminent.
+          runbook_url: "https://wiki.constructai.internal/runbooks/memory-critical"
+
+      - alert: DbConnectionPoolExhausted
+        expr: >
+          pg_stat_activity_count
+          / pg_settings_max_connections
+          > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          team: infra
+        annotations:
+          summary: "Database connection pool nearing exhaustion"
+          description: >
+            PostgreSQL connection usage is at {{ $value | humanizePercentage }}
+            of max_connections. Pool exhaustion may cause request failures.
+          runbook_url: "https://wiki.constructai.internal/runbooks/db-connections"
+
+      - alert: DbConnectionPoolCritical
+        expr: >
+          pg_stat_activity_count
+          / pg_settings_max_connections
+          > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          team: infra
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: >
+            PostgreSQL connection usage is at {{ $value | humanizePercentage }}
+            of max_connections. Immediate intervention required.
+          runbook_url: "https://wiki.constructai.internal/runbooks/db-connections-critical"

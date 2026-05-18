@@ -1,0 +1,232 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: constructai
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-ingress
+  namespace: constructai
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: api
+      app.kubernetes.io/part-of: constructai
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: web
+              app.kubernetes.io/part-of: constructai
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-to-db
+  namespace: constructai
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: api
+      app.kubernetes.io/part-of: constructai
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+              app.kubernetes.io/part-of: constructai
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: redis
+              app.kubernetes.io/part-of: constructai
+      ports:
+        - protocol: TCP
+          port: 6379    # Non-TLS (dev/staging)
+        - protocol: TCP
+          port: 6380    # TLS (production)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kafka
+              app.kubernetes.io/part-of: constructai
+      ports:
+        - protocol: TCP
+          port: 9092
+    # Allow outbound HTTPS to external APIs (LLM providers, data APIs, integrations).
+    #
+    # SECURITY [M-25]: This rule currently allows egress to ANY host on port 443.
+    # Known required external APIs:
+    #   - api.openai.com           (LLM provider - GPT-4o)
+    #   - api.anthropic.com        (LLM provider - Claude)
+    #   - generativelanguage.googleapis.com  (LLM provider - Gemini)
+    #   - api.cohere.ai            (Reranking)
+    #   - api.voyageai.com         (Embeddings)
+    #   - api.fred.stlouisfed.org  (FRED economic data)
+    #   - api.bls.gov              (BLS labor statistics)
+    #   - login.procore.com        (Procore OAuth)
+    #   - sandbox.procore.com / app.procore.com  (Procore API)
+    #   - api.open-meteo.com       (Weather - Open-Meteo)
+    #   - api.openweathermap.org   (Weather - OpenWeatherMap)
+    #   - api.weather.gov          (Weather - NOAA/NWS)
+    #   - accounts.google.com / login.microsoftonline.com  (SSO providers)
+    #   - oauth2.googleapis.com / graph.microsoft.com  (SSO token/userinfo)
+    #   - smtp provider (if external SMTP over TLS on 443)
+    #
+    # SECURITY TODO [M-25]: Restrict to specific IP ranges or use a DNS-aware
+    # network policy controller (e.g., Cilium FQDN policies) to limit egress
+    # to only the above domains. Until then, this is an overly permissive rule
+    # that allows data exfiltration to arbitrary HTTPS endpoints.
+    # PRODUCTION: This rule should be restricted to specific FQDN/IPs.
+    # With standard NetworkPolicy, you can only restrict by IP ranges (ipBlock.cidr).
+    # For FQDN-based restrictions, use a DNS-aware policy controller such as Cilium.
+    #
+    # Example Cilium CiliumNetworkPolicy (apply instead of the rule below):
+    # ---
+    # apiVersion: cilium.io/v2
+    # kind: CiliumNetworkPolicy
+    # metadata:
+    #   name: allow-api-external-https
+    #   namespace: constructai
+    # spec:
+    #   endpointSelector:
+    #     matchLabels:
+    #       app.kubernetes.io/name: api
+    #   egress:
+    #     - toFQDNs:
+    #         - matchName: "api.openai.com"
+    #         - matchName: "api.anthropic.com"
+    #         - matchName: "generativelanguage.googleapis.com"
+    #         - matchName: "api.cohere.ai"
+    #         - matchName: "api.voyageai.com"
+    #         - matchName: "api.fred.stlouisfed.org"
+    #         - matchName: "api.bls.gov"
+    #         - matchName: "login.procore.com"
+    #         - matchName: "sandbox.procore.com"
+    #         - matchName: "app.procore.com"
+    #         - matchName: "api.open-meteo.com"
+    #         - matchName: "api.openweathermap.org"
+    #         - matchName: "api.weather.gov"
+    #         - matchName: "accounts.google.com"
+    #         - matchName: "login.microsoftonline.com"
+    #         - matchName: "oauth2.googleapis.com"
+    #         - matchName: "graph.microsoft.com"
+    #       toPorts:
+    #         - ports:
+    #             - port: "443"
+    #               protocol: TCP
+    # PRODUCTION: Replace this overly permissive rule with the Cilium FQDN policy
+    # in cilium-egress-policy.yaml when Cilium CNI is available in the cluster.
+    - ports:
+        - protocol: TCP
+          port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-web-to-api
+  namespace: constructai
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: web
+      app.kubernetes.io/part-of: constructai
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: api
+              app.kubernetes.io/part-of: constructai
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+# SECURITY [L-15]: Restrict monitoring scrape to specific pods that expose
+# metrics endpoints. Previously the empty podSelector allowed the monitoring
+# namespace to reach ALL pods on any of the listed ports.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scrape-api
+  namespace: constructai
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: api
+      app.kubernetes.io/part-of: constructai
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scrape-web
+  namespace: constructai
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: web
+      app.kubernetes.io/part-of: constructai
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: constructai
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

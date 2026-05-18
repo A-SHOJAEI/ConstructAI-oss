@@ -1,0 +1,74 @@
+# Extends the base docker-compose.yml with demo-specific settings
+# Usage: docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d
+
+services:
+  postgres:
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    environment:
+      POSTGRES_SHARED_BUFFERS: 512MB
+      POSTGRES_WORK_MEM: 64MB
+
+  # pgAdmin for database exploration during demos
+  pgadmin:
+    image: dpage/pgadmin4:8.14
+    container_name: constructai-pgadmin
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@constructai.dev
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?Set PGADMIN_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "127.0.0.1:5050:80"
+    volumes:
+      - constructai_pgadmin:/var/lib/pgadmin
+    depends_on:
+      - postgres
+
+  # Kafka UI for event visualization during demos
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: constructai-kafka-ui
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: constructai
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    depends_on:
+      - kafka
+
+  # MinIO bucket auto-creation for demo
+  minio-setup:
+    image: minio/mc:RELEASE.2024-11-17T19-35-25Z
+    container_name: constructai-minio-setup
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}
+    entrypoint: >
+      sh -c '
+        mc alias set local http://minio:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD &&
+        mc mb --ignore-existing local/constructai-documents &&
+        mc mb --ignore-existing local/constructai-models &&
+        mc mb --ignore-existing local/constructai-reports &&
+        mc mb --ignore-existing local/constructai-photos &&
+        echo "Buckets created successfully"
+      '
+
+volumes:
+  constructai_pgadmin:

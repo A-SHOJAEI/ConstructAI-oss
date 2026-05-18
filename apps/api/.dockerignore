@@ -1,0 +1,48 @@
+# Development artifacts
+.venv/
+.env
+.env.*
+.coverage
+htmlcov/
+.pytest_cache/
+__pycache__/
+*.pyc
+
+# Tests and docs (not needed in runtime image)
+tests/
+docs/
+*.md
+!README.md
+
+# IDE
+.idea/
+.vscode/
+
+# Git
+.git/
+.gitignore
+
+# ML training data and models (loaded separately)
+ml/
+models/
+
+# Misc
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+
+# L-19: Prevent accidental credential inclusion. These paths should never
+# be on a developer's checkout, but belt-and-suspenders.
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+credentials.json
+service-account*.json
+.aws/
+.gcp/
+.ssh/
+.netrc

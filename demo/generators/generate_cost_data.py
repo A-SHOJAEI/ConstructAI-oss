@@ -1,0 +1,84 @@
+"""
+Generate a CSV file with 50 WBS-level cost line items for EVM import.
+
+Usage:
+    python -m demo.generators.generate_cost_data [output_path]
+"""
+import csv
+import sys
+from pathlib import Path
+
+COST_ITEMS = [
+    ("01-001", "Mobilization", 250000, 262000, 250000, 250000),
+    ("01-002", "Temporary Facilities", 180000, 185000, 180000, 180000),
+    ("01-003", "Project Management", 420000, 435000, 420000, 410000),
+    ("01-004", "Insurance & Bonding", 315000, 315000, 315000, 315000),
+    ("02-001", "Site Clearing", 180000, 175000, 180000, 180000),
+    ("02-002", "Excavation - Parking Garage", 950000, 1020000, 950000, 870000),
+    ("02-003", "Dewatering System", 120000, 168000, 120000, 110000),
+    ("02-004", "Underground Utilities", 380000, 395000, 380000, 350000),
+    ("02-005", "Erosion Control", 85000, 82000, 85000, 85000),
+    ("03-001", "Foundation Formwork", 850000, 920000, 850000, 780000),
+    ("03-002", "Foundation Rebar", 620000, 650000, 620000, 570000),
+    ("03-003", "Foundation Concrete", 1100000, 1180000, 1100000, 1010000),
+    ("03-004", "Foundation Waterproofing", 280000, 290000, 280000, 260000),
+    ("03-005", "SOG / Backfill", 340000, 355000, 340000, 320000),
+    ("04-001", "Steel Shop Drawings", 180000, 175000, 180000, 180000),
+    ("04-002", "Steel Fabrication", 2800000, 2850000, 2800000, 2520000),
+    ("04-003", "Steel Erection - L1", 680000, 710000, 680000, 625000),
+    ("04-004", "Steel Erection - L2", 580000, 595000, 580000, 530000),
+    ("04-005", "Steel Erection - L3", 580000, 600000, 580000, 500000),
+    ("04-006", "Steel Erection - L4-5", 720000, 740000, 720000, 580000),
+    ("04-007", "Steel Connections & Bolting", 450000, 465000, 450000, 350000),
+    ("05-001", "Metal Deck L1-L2", 420000, 430000, 420000, 390000),
+    ("05-002", "Concrete on Deck", 680000, 700000, 680000, 550000),
+    ("05-003", "Curtain Wall Fabrication", 2200000, 2200000, 2200000, 1200000),
+    ("05-004", "Curtain Wall Installation", 1800000, 1800000, 1800000, 400000),
+    ("05-005", "Roofing", 480000, 480000, 480000, 100000),
+    ("05-006", "Below Grade Waterproofing", 320000, 335000, 320000, 300000),
+    ("06-001", "Electrical Rough-in L1-L2", 850000, 870000, 850000, 600000),
+    ("06-002", "Plumbing Rough-in L1-L2", 620000, 640000, 620000, 440000),
+    ("06-003", "HVAC Ductwork L1-L2", 780000, 800000, 780000, 520000),
+    ("06-004", "Fire Sprinkler", 520000, 530000, 520000, 350000),
+    ("06-005", "Elevator Installation", 1200000, 1200000, 1200000, 300000),
+    ("06-006", "MEP Rough-in L3-L5", 1400000, 1400000, 1400000, 200000),
+    ("07-001", "Drywall & Framing L1-L2", 680000, 690000, 680000, 150000),
+    ("07-002", "Drywall & Framing L3-L5", 850000, 850000, 850000, 0),
+    ("07-003", "Taping & Finishing", 420000, 420000, 420000, 0),
+    ("07-004", "Painting", 380000, 380000, 380000, 0),
+    ("07-005", "Flooring - Retail", 280000, 280000, 280000, 0),
+    ("07-006", "Flooring - Office", 350000, 350000, 350000, 0),
+    ("07-007", "Flooring - Residential", 420000, 420000, 420000, 0),
+    ("07-008", "Millwork & Casework", 520000, 520000, 520000, 0),
+    ("07-009", "Tile Work", 280000, 280000, 280000, 0),
+    ("08-001", "MEP Systems Testing", 180000, 180000, 180000, 0),
+    ("08-002", "Fire Alarm Testing", 85000, 85000, 85000, 0),
+    ("08-003", "Elevator Inspection", 45000, 45000, 45000, 0),
+    ("08-004", "Punch List", 120000, 120000, 120000, 0),
+    ("08-005", "Final Cleaning", 65000, 65000, 65000, 0),
+    ("08-006", "Certificate of Occupancy", 35000, 35000, 35000, 0),
+    ("08-007", "Demobilization", 95000, 95000, 95000, 0),
+    ("09-001", "General Conditions Allowance", 850000, 870000, 850000, 750000),
+]
+
+
+def generate_cost_csv(output_path: Path) -> Path:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["wbs_code", "description", "budget", "actual_to_date", "committed", "earned_value"])
+        for row in COST_ITEMS:
+            writer.writerow(row)
+    return output_path
+
+
+if __name__ == "__main__":
+    out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("demo/output/cost_data.csv")
+    p = generate_cost_csv(out)
+    print(f"Generated: {p}")
+    total_budget = sum(r[2] for r in COST_ITEMS)
+    total_actual = sum(r[3] for r in COST_ITEMS)
+    total_ev = sum(r[5] for r in COST_ITEMS)
+    print(f"Total budget: ${total_budget:,.0f}")
+    print(f"Total actual: ${total_actual:,.0f}")
+    print(f"Total EV:     ${total_ev:,.0f}")

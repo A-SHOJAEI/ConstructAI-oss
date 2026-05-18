@@ -1,0 +1,5 @@
+# Python lint
+cd apps/api && ruff check --fix . && ruff format . && cd ../..
+
+# Frontend lint
+cd apps/web && npx eslint --fix src/ && npx prettier --write "src/**/*.{ts,tsx}" && cd ../..

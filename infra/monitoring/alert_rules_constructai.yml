@@ -1,0 +1,122 @@
+# ConstructAI Application-Level Alert Rules
+#
+# These rules complement the infrastructure-level alerts in alert_rules.yml.
+# They focus on application-specific failure modes: auth abuse, webhook
+# reliability, task queue health, connection pool exhaustion, LLM circuit
+# breaker state, aggregate error budget, and Redis availability.
+#
+# To activate, add this file to the Prometheus rule_files list in prometheus.yml:
+#   rule_files:
+#     - /etc/prometheus/alert_rules.yml
+#     - /etc/prometheus/alert_rules_constructai.yml
+
+groups:
+  - name: constructai_alerts
+    rules:
+      - alert: HighAuthFailureRate
+        expr: rate(http_requests_total{handler="/api/v1/auth/login",status="401"}[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "High auth failure rate (>10 failures/5min)"
+          description: >
+            The login endpoint is returning 401s at {{ $value | humanize }}/s
+            over the last 5 minutes. This may indicate credential stuffing or
+            a misconfigured client.
+          runbook_url: "https://wiki.constructai.internal/runbooks/auth-failure-rate"
+
+      - alert: WebhookProcessingFailure
+        expr: rate(http_requests_total{handler=~"/api/v1/webhooks/.*",status="5.."}[5m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Webhook processing failures detected"
+          description: >
+            Webhook endpoints are returning 5xx errors at {{ $value | humanize }}/s.
+            Procore sync and downstream event processing may be disrupted.
+          runbook_url: "https://wiki.constructai.internal/runbooks/webhook-failures"
+
+      - alert: CeleryQueueBacklog
+        expr: celery_queue_length{queue="default"} > 100
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Celery queue backlog >100 tasks"
+          description: >
+            The default Celery queue has {{ $value }} pending tasks.
+            Document ingestion, scheduled FRED/BLS fetches, and async
+            processing may be delayed.
+          runbook_url: "https://wiki.constructai.internal/runbooks/celery-backlog"
+
+      - alert: DatabaseConnectionPoolExhaustion
+        expr: sqlalchemy_pool_overflow > 20
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "DB connection pool overflow"
+          description: >
+            SQLAlchemy pool overflow count is {{ $value }}, indicating that
+            the application has exceeded its configured pool_size + max_overflow.
+            New requests will block or fail.
+          runbook_url: "https://wiki.constructai.internal/runbooks/db-connections-critical"
+
+      - alert: LLMGatewayCircuitOpen
+        expr: llm_circuit_breaker_state{state="open"} == 1
+        for: 1m
+        labels:
+          severity: warning
+          team: ml
+        annotations:
+          summary: "LLM circuit breaker is open — AI features degraded"
+          description: >
+            The LLM gateway circuit breaker has tripped. Features dependent on
+            LLM calls (RFI agent, Ask ConstructAI, contract intelligence,
+            auto daily reports) will return fallback responses or errors until
+            the circuit resets.
+          runbook_url: "https://wiki.constructai.internal/runbooks/llm-circuit-breaker"
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Error rate >5% for 3 minutes"
+          description: >
+            The overall 5xx error rate is {{ $value | humanizePercentage }}.
+            This exceeds the 5% SLO threshold and affects all API consumers.
+          runbook_url: "https://wiki.constructai.internal/runbooks/api-error-rate"
+
+      - alert: RedisUnavailable
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Redis is down — rate limiting, caching, and token blacklist affected"
+          description: >
+            Redis is unreachable. Affected subsystems: rate limiter (will reject
+            all requests in production), FRED/BLS cache, token blacklist (revoked
+            tokens may be accepted), WebSocket pub/sub, Celery broker.
+          runbook_url: "https://wiki.constructai.internal/runbooks/redis-down"
+
+      - alert: CertificateExpiringSoon
+        expr: probe_ssl_earliest_cert_expiry - time() < 7 * 86400
+        for: 1h
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "TLS certificate expiring within 7 days"
+          description: "Certificate for {{ $labels.instance }} expires in {{ $value | humanizeDuration }}"
+          runbook_url: "https://docs.constructai.io/runbooks/tls-cert-renewal"

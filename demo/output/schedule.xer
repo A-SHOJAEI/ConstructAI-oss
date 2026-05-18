@@ -1,0 +1,46 @@
+ERMHDR	12.0	2026-02-23	ConstructAI Demo Export
+
+%T	PROJECT
+%F	proj_id	proj_short_name	plan_start_date	plan_end_date
+%R	1	RMD-2025-001	2025-05-01	2026-10-31
+
+%T	CALENDAR
+%F	clndr_id	clndr_name	day_hr_cnt
+%R	1	Standard 5-Day	8.0
+
+%T	TASK
+%F	task_id	task_code	task_name	target_drtn_hr_cnt	early_start_date	early_end_date
+%R	1	A010	Mobilization	80	2025-05-01	2025-05-11
+%R	2	A020	Site Clearing	64	2025-05-12	2025-05-20
+%R	3	A022	Excavation - Parking Garage	200	2025-05-21	2025-06-15
+%R	4	A030	Foundation Formwork	120	2025-06-16	2025-07-01
+%R	5	A031	Foundation Rebar	96	2025-07-02	2025-07-14
+%R	6	A032	Foundation Concrete Pour	64	2025-07-15	2025-07-23
+%R	7	A042	Steel Erection - Level 1	120	2025-07-24	2025-08-08
+%R	8	A043	Steel Erection - Level 2	96	2025-08-09	2025-08-21
+%R	9	A044	Steel Erection - Level 3	96	2025-08-22	2025-09-03
+%R	10	A045	Steel Erection - Level 4-5	120	2025-09-04	2025-09-19
+%R	11	A050	Metal Deck - Level 1	80	2025-08-09	2025-08-19
+%R	12	A052	Concrete on Deck	160	2025-08-20	2025-09-09
+%R	13	A060	Electrical Rough-in L1-L2	200	2025-09-10	2025-10-05
+%R	14	A063	Fire Sprinkler	160	2025-10-06	2025-10-26
+%R	15	A070	Drywall & Framing L1-L2	160	2025-10-27	2025-11-16
+%R	16	A073	Painting	160	2025-12-01	2025-12-21
+%R	17	A075	Flooring - Office	120	2025-12-22	2026-01-06
+%R	18	A080	MEP Systems Testing	120	2026-01-07	2026-01-22
+%R	19	A083	Punch List	120	2026-02-01	2026-02-16
+%R	20	A085	Certificate of Occupancy	80	2026-02-20	2026-03-02
+
+%T	TASKPRED
+%F	task_id	pred_task_id	pred_type	lag_hr_cnt
+%R	2	1	PR_FS	0
+%R	3	2	PR_FS	0
+%R	4	3	PR_FS	0
+%R	5	4	PR_FS	0
+%R	6	5	PR_FS	0
+%R	7	6	PR_FS	0
+%R	8	7	PR_FS	0
+%R	9	8	PR_FS	0
+%R	10	9	PR_FS	0
+
+%E

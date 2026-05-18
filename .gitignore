@@ -1,0 +1,92 @@
+# Dependencies
+node_modules/
+.venv/
+.venv-*/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+
+# Build
+.next/
+dist/
+build/
+*.egg-info/
+.turbo/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+coverage/
+
+# Logs
+*.log
+logs/
+training_log.txt
+
+# Docker / MinIO
+minio_data/
+postgres_data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Stray / accidental
+~/
+
+# ---------------------------------------------------------------------------
+# ML datasets, training data, and model artifacts.
+# These are tracked out-of-band (S3 / model registry / HuggingFace / W&B).
+# Keep the code in git; keep the weights + data on object storage.
+# ---------------------------------------------------------------------------
+
+# Training datasets (58 GB + 25 GB)
+constructai-data/
+constructai_safety/
+
+# Trained model artifacts (20 GB) — only the repo-root directory, NOT app/models/
+/models/
+
+# Pretrained weights at repo root
+*.pt
+*.pth
+*.onnx
+*.safetensors
+*.bin
+*.pkl
+*.h5
+*.ckpt
+*.tflite
+*.pb
+*.engine
+
+# Downloaded datasets / training outputs
+ml/data/downloaded/
+ml/training/runs/
+ml/training/outputs/
+wandb/
+mlruns/
+
+# Demo runtime artifacts
+data/
+apps/api/celerybeat-schedule*
+.claude/scaffold-state.json
+apps/api/static/demo-backups/_webm/
+/tmp/
+apps/web/package-lock.json
