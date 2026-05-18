@@ -32,7 +32,7 @@ if "_test" not in os.environ["DATABASE_URL"]:
         f"Refusing to run tests against non-_test database: {os.environ['DATABASE_URL']!r}. "
         "Set PYTEST_DATABASE_URL to a URL whose database name contains '_test', "
         "or run tests against the constructai_test DB."
-)
+    )
 
 # Load .env file so API keys (BLS, FRED, etc.) are available in tests
 from dotenv import load_dotenv
@@ -43,15 +43,15 @@ if not _env_path.exists():
 load_dotenv(_env_path, override=False)
 
 import pytest_asyncio
+from app.models.base import Base
+from app.models.organization import Organization
+from app.models.user import User
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.database import get_db
 from app.main import create_app
-from app.models.base import Base
-from app.models.organization import Organization
-from app.models.user import User
 from app.utils.security import create_access_token, hash_password
 
 # Use test database URL — guaranteed to contain "_test" by the safety check above.

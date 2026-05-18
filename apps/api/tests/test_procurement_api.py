@@ -10,8 +10,8 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest_asyncio
-
 from app.models.project import Project
+
 from tests.fixtures.precon_mock_responses import MOCK_LLM_CONTRACT_RISK_RESPONSE
 
 

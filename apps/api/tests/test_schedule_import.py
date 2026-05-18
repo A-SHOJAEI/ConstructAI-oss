@@ -8,10 +8,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.project import Project
 from app.models.scheduling import ScheduleActivity, ScheduleBaseline
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.services.scheduling.cpm_engine import DEFAULT_CALENDAR, WorkCalendar, calculate_cpm
 
 # ---------------------------------------------------------------------------

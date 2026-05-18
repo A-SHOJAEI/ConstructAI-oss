@@ -26,9 +26,6 @@ from pathlib import Path
 # Ensure app package is importable
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
 from app.models.bid import BidDecision, BidOpportunity
 from app.models.camera import Camera, SafetyZone
 from app.models.change_order_lifecycle import (
@@ -60,6 +57,9 @@ from app.models.quality import Inspection
 from app.models.safety_incident import SafetyAlert
 from app.models.scheduling import ScheduleActivity, ScheduleBaseline
 from app.models.user import User
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from app.utils.security import hash_password
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")

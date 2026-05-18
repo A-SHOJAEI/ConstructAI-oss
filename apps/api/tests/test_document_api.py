@@ -10,9 +10,9 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest_asyncio
-
 from app.models.document import Document
 from app.models.project import Project
+
 from tests.fixtures.mock_responses import (
     MOCK_LLM_ANSWER_RESPONSE,
     MOCK_VOYAGE_EMBEDDING,

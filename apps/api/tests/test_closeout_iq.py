@@ -15,9 +15,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.closeout import (
     CloseoutCommunication,
     CloseoutRequirement,
@@ -26,6 +23,8 @@ from app.models.closeout import (
 from app.models.organization import Organization
 from app.models.project import Project
 from app.models.user import User
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -299,6 +298,7 @@ class TestGenerateRequirements:
     ):
         """When LLM returns results, those are used instead of fallback."""
         from app.models.document import Document, DocumentChunk
+
         from app.services.products.closeout_iq.service import generate_requirements
 
         # Create a fake document with chunks
@@ -352,6 +352,7 @@ class TestGenerateRequirements:
     ):
         """When LLM returns empty list, fallback is used."""
         from app.models.document import Document, DocumentChunk
+
         from app.services.products.closeout_iq.service import generate_requirements
 
         doc = Document(
@@ -747,6 +748,7 @@ class TestHandleSubUpload:
         test_org: Organization,
     ):
         from app.models.magic_link import MagicLinkToken
+
         from app.services.products.closeout_iq.service import handle_sub_upload
 
         # Create a magic link token
@@ -780,6 +782,7 @@ class TestHandleSubUpload:
         test_org: Organization,
     ):
         from app.models.magic_link import MagicLinkToken
+
         from app.services.products.closeout_iq.service import handle_sub_upload
 
         token = MagicLinkToken(
@@ -821,6 +824,7 @@ class TestHandleSubUpload:
         test_org: Organization,
     ):
         from app.models.magic_link import MagicLinkToken
+
         from app.services.products.closeout_iq.service import handle_sub_upload
 
         token = MagicLinkToken(
@@ -850,6 +854,7 @@ class TestHandleSubUpload:
         test_org: Organization,
     ):
         from app.models.magic_link import MagicLinkToken
+
         from app.services.products.closeout_iq.service import handle_sub_upload
 
         token = MagicLinkToken(

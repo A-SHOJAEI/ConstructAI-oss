@@ -15,12 +15,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.audit import AuditLog
 from app.models.project import Project, ProjectMember
 from app.models.user import User
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.services.security.mfa import (
     generate_backup_codes,
     generate_qr_code_data_uri,

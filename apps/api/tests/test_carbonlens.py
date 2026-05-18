@@ -31,6 +31,7 @@ from app.models.carbon import (
     EpdRecord,
     ProjectCarbonConfig,
 )
+
 from app.services.products.carbonlens.service import (
     BUILDING_TYPE_BASELINES,
     CSI_CATEGORY_MAP,

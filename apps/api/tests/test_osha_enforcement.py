@@ -1143,13 +1143,13 @@ class TestApiEndpoints:
     @pytest.fixture
     def client(self):
         """Create a test client with mocked DB and auth dependencies."""
+        from app.models.user import User
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
         from app.api.v1.osha import router
         from app.database import get_db
         from app.dependencies import get_current_user
-        from app.models.user import User
 
         app = FastAPI()
         app.include_router(router, prefix="/osha")

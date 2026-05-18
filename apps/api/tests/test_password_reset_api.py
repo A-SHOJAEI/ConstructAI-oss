@@ -39,9 +39,10 @@ def _clear_reset_trackers():
     _reset_attempt_tracker.clear()
 
 
-from app.config import settings
 from app.models.organization import Organization
 from app.models.user import User
+
+from app.config import settings
 from app.utils.security import hash_password
 
 

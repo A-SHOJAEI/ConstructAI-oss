@@ -20,8 +20,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from app.models.tm_entry import CorNegotiation, TmEntry
+
 from app.schemas.changeflow import (
     ChangeFlowDashboardResponse,
     CorGenerateRequest,

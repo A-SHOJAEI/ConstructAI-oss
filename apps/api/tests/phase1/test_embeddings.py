@@ -45,10 +45,10 @@ class TestEmbeddings:
     @patch("app.services.rag.embeddings._get_voyage_client")
     async def test_embedding_stored_in_pgvector(self, mock_get_client, db_session, test_org):
         """Embeddings should be persistable to the database and retrievable via raw SQL."""
-        from sqlalchemy import text
-
         from app.models.document import Document, DocumentChunk
         from app.models.project import Project
+        from sqlalchemy import text
+
         from app.services.rag.embeddings import generate_embeddings, store_embeddings
 
         # Set up mock Voyage client

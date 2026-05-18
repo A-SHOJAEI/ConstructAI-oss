@@ -21,13 +21,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+from app.models.communication import RFI
+from app.models.organization import Organization
+from app.models.project import Project
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.database import async_session
-from app.models.communication import RFI
-from app.models.organization import Organization
-from app.models.project import Project
 from app.services.rag.retrieval import index_rfi_for_search
 
 NS = uuid.UUID("00000000-0000-0000-0000-000000000002")

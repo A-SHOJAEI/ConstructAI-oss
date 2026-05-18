@@ -27,12 +27,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 import fitz
-from sqlalchemy import select
-
-from app.database import async_session
 from app.models.document import Document, DocumentChunk
 from app.models.organization import Organization
 from app.models.project import Project
+from sqlalchemy import select
+
+from app.database import async_session
 from app.services.ingestion.chunking import chunk_document_smart
 from app.services.ingestion.embedder import embed_chunks, store_chunk_embeddings
 from app.services.ingestion.pdf_parser import (
@@ -298,8 +298,7 @@ async def _ingest_one(
         if dry_run:
             chunks = chunk_document_smart(pages)
             print(
-                f"  [dry] {org.slug} <- {batch_title}: {len(pages)} pages -> "
-                f"{len(chunks)} chunks"
+                f"  [dry] {org.slug} <- {batch_title}: {len(pages)} pages -> {len(chunks)} chunks"
             )
             total_chunks += len(chunks)
             continue

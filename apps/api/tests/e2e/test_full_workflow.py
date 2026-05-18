@@ -489,9 +489,8 @@ class TestStep08BidScoring:
             pytest.skip("No org created")
 
         # Get or create a bid
-        from sqlalchemy import select
-
         from app.models.bid import BidOpportunity
+        from sqlalchemy import select
 
         stmt = (
             select(BidOpportunity).where(BidOpportunity.org_id == uuid.UUID(DEMO_ORG_ID)).limit(1)
@@ -562,9 +561,8 @@ class TestStep09RFIAutoResolution:
             pytest.skip("No project created")
 
         # Find an existing RFI
-        from sqlalchemy import select
-
         from app.models.communication import RFI
+        from sqlalchemy import select
 
         stmt = select(RFI).where(RFI.project_id == uuid.UUID(DEMO_PROJECT_ID)).limit(1)
         result = await db_session.execute(stmt)

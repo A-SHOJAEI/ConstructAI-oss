@@ -13,7 +13,6 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from app.models.heat_compliance import (
     HeatIncidentReport,
     HeatMonitoringConfig,
@@ -21,6 +20,7 @@ from app.models.heat_compliance import (
     RestBreakLog,
     WorkerAcclimatization,
 )
+
 from app.services.products.heatshield.service import (
     _time_to_minutes,
     add_worker,

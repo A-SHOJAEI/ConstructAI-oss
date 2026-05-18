@@ -31,10 +31,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
-
-from app.database import async_session
 from app.models.change_order_lifecycle import PotentialChangeOrder
 from app.models.communication import (
     RFI,
@@ -49,6 +45,10 @@ from app.models.project import Project
 from app.models.quality import DefectReport, Inspection
 from app.models.safety_incident import SafetyAlert
 from app.models.user import User
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
+
+from app.database import async_session
 from app.services.rag.retrieval import index_rfi_for_search
 
 NS = uuid.UUID("00000000-0000-0000-0000-000000000004")
@@ -315,7 +315,7 @@ SUBMITTALS = [
         "status": "submitted",
         "due_offset_days": 14,
         "description": (
-            "Mockup pending; structural calculations and weatherproofing " "details for review."
+            "Mockup pending; structural calculations and weatherproofing details for review."
         ),
     },
     {

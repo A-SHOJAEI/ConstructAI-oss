@@ -33,9 +33,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from sqlalchemy import text  # noqa: E402
+from sqlalchemy import text
 
-from app.database import async_session  # noqa: E402
+from app.database import async_session
 
 
 async def reset() -> None:

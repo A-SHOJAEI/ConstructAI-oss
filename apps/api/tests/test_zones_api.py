@@ -9,7 +9,6 @@ from __future__ import annotations
 import uuid
 
 import pytest_asyncio
-
 from app.models.camera import Camera
 from app.models.project import Project
 

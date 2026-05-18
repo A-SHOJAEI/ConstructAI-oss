@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.models.project import Project
 
 

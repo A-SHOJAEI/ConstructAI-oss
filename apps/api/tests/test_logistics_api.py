@@ -10,8 +10,8 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest_asyncio
-
 from app.models.project import Project
+
 from tests.fixtures.precon_mock_responses import (
     MOCK_FACILITIES,
     MOCK_SIMULATION_SCENARIO,

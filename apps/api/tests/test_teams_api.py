@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest_asyncio
-
 from app.models.project import Project
 
 

@@ -351,6 +351,7 @@ def _encode_features_v11(params: dict) -> Any:
 # Auto-discovery of trained model from registry
 # ---------------------------------------------------------------------------
 
+
 # Search paths for the trained model (checked in order). Some deployments
 # (e.g. the Docker image where the file lives at /app/app/services/...) have
 # fewer parent directories than the source tree, so guard each path lookup

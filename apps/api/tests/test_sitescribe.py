@@ -19,8 +19,8 @@ import uuid
 from datetime import date
 
 import pytest
-
 from app.models.report_source import ReportSource
+
 from app.services.products.sitescribe.service import (
     _build_template_narrative,
     approve_report,

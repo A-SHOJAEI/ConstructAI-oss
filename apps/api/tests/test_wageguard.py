@@ -10,9 +10,9 @@ from decimal import Decimal
 
 import pytest
 import pytest_asyncio
-
 from app.models.project import Project
 from app.models.wage_compliance import WageDetermination
+
 from app.services.products.wageguard.service import (
     KNOWN_CLASSIFICATIONS,
     SEED_DETERMINATIONS,

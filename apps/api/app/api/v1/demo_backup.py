@@ -65,7 +65,7 @@ def _placeholder_html(segment: str, label: str) -> str:
        auto-play.</p>
   </div>
   <p>Other segments:
-    {' &middot; '.join(f'<a href="/api/v1/demo/backup/{s}">{s}</a>' for s in SEGMENTS)}
+    {" &middot; ".join(f'<a href="/api/v1/demo/backup/{s}">{s}</a>' for s in SEGMENTS)}
   </p>
 </body>
 </html>"""
@@ -135,7 +135,7 @@ async def backup_index() -> HTMLResponse:
     for seg, label in SEGMENTS.items():
         mp4 = STATIC_DIR / f"{seg}.mp4"
         status = (
-            f"<span style='color:#4caf50'>recorded ({mp4.stat().st_size//1024} KB)</span>"
+            f"<span style='color:#4caf50'>recorded ({mp4.stat().st_size // 1024} KB)</span>"
             if mp4.exists() and mp4.stat().st_size > 0
             else "<span style='color:#ef5350'>NOT recorded</span>"
         )
@@ -150,7 +150,7 @@ table{{border-collapse:collapse;}}td{{padding:0.4em 1em;border-bottom:1px solid 
 </head><body>
 <h1>Demo backup screencasts</h1>
 <table><thead><tr><th>segment</th><th>covers</th><th>status</th></tr></thead>
-<tbody>{''.join(rows)}</tbody></table>
+<tbody>{"".join(rows)}</tbody></table>
 <p>Drop MP4s in <code>{STATIC_DIR}</code> to populate.</p>
 </body></html>"""
     )

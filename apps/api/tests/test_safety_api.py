@@ -10,7 +10,6 @@ import uuid
 from decimal import Decimal
 
 import pytest_asyncio
-
 from app.models.camera import Camera
 from app.models.project import Project
 from app.models.safety_incident import SafetyAlert

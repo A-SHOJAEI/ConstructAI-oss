@@ -5,8 +5,8 @@ from __future__ import annotations
 import uuid
 
 import pytest_asyncio
-
 from app.models.project import Project
+
 from tests.conftest import *  # noqa: F403
 
 

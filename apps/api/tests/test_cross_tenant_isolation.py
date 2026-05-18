@@ -30,6 +30,7 @@ async def test_user_from_org_b_cannot_read_org_a_project(
     from app.models.organization import Organization
     from app.models.project import Project
     from app.models.user import User
+
     from app.utils.security import create_access_token, hash_password
 
     # Two independent tenants.
@@ -85,6 +86,7 @@ async def test_user_from_org_b_cannot_list_org_a_rfis(
     from app.models.organization import Organization
     from app.models.project import Project
     from app.models.user import User
+
     from app.utils.security import create_access_token, hash_password
 
     org_a = Organization(name="Org A", slug="org-a-" + str(uuid.uuid4())[:8])

@@ -8,11 +8,11 @@ from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.communication import RFI, Submittal
 from app.models.field_management import PunchListItem
 from app.models.project import Project
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.services.communication.drawing_service import (
     infer_discipline,
     parse_sheet_number,

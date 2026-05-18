@@ -9,10 +9,10 @@ import uuid
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.organization import Organization
 from app.models.user import User
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.utils.security import create_access_token, hash_password
 
 # ---------------------------------------------------------------------------
