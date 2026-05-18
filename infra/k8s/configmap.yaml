@@ -14,8 +14,8 @@ data:
   API_HOST: "0.0.0.0"
   API_PORT: "8000"
   API_WORKERS: "4"
-  CORS_ORIGINS: "https://app.constructai.io"
-  ALLOWED_HOSTS: "app.constructai.io,api.constructai.io"
+  CORS_ORIGINS: "https://app.your-deployment.example.com"
+  ALLOWED_HOSTS: "app.your-deployment.example.com,api.your-deployment.example.com"
 
   # ---------- Database ----------
   POSTGRES_HOST: "postgres"
@@ -43,9 +43,9 @@ data:
   PROMETHEUS_ENABLED: "true"
 
   # ---------- Web / Next.js ----------
-  NEXT_PUBLIC_API_URL: "https://api.constructai.io"
-  NEXT_PUBLIC_WS_URL: "wss://api.constructai.io/ws"
-  NEXTAUTH_URL: "https://app.constructai.io"
+  NEXT_PUBLIC_API_URL: "https://api.your-deployment.example.com"
+  NEXT_PUBLIC_WS_URL: "wss://api.your-deployment.example.com/ws"
+  NEXTAUTH_URL: "https://app.your-deployment.example.com"
 
   # ---------- Auth ----------
   JWT_ALGORITHM: "HS256"

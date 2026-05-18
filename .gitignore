@@ -20,6 +20,37 @@ build/
 .env.local
 .env.*.local
 
+# Secrets, credentials, keys, certificates — never commit these
+# (Templates and example files are explicitly allowed below.)
+*.pem
+*.key
+!package.json.key   # never used; here for documentation
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.crt
+*.cer
+*.der
+id_rsa
+id_ed25519
+id_ecdsa
+id_dsa
+*_rsa
+*_ed25519
+*.gpg
+*.asc
+secrets/
+secret/
+credentials/
+credentials.json
+serviceaccount*.json
+gcp-key*.json
+aws-credentials*
+.aws/credentials
+.netrc
+.npmrc
+
 # IDE
 .vscode/
 .idea/

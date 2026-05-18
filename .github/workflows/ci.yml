@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ruff:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install --no-cache-dir ruff==0.15.12
+
+      - name: ruff format --check
+        working-directory: apps/api
+        run: ruff format --check .
+
+      - name: ruff check
+        working-directory: apps/api
+        run: ruff check .
+
+  test-frontend:
+    name: Tests (web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run vitest with coverage
+        working-directory: apps/web
+        # Threshold reflects current measured baseline. Raise as the test suite grows.
+        run: npx vitest run --coverage --coverage.thresholds.lines=14

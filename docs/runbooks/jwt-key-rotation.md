@@ -20,7 +20,7 @@
 
 2. Call rotation endpoint:
    ```bash
-   curl -X POST https://api.constructai.io/api/v1/admin/jwt/rotate \
+   curl -X POST https://api.your-deployment.example.com/api/v1/admin/jwt/rotate \
      -H "Authorization: Bearer $ADMIN_TOKEN" \
      -H "Content-Type: application/json" \
      -d "{\"new_key\": \"$NEW_KEY\"}"
@@ -47,7 +47,7 @@
 ## Verification
 ```bash
 # Verify new tokens use new key version
-curl -s https://api.constructai.io/api/v1/auth/me \
+curl -s https://api.your-deployment.example.com/api/v1/auth/me \
   -H "Authorization: Bearer $NEW_TOKEN" | jq .
 ```
 
