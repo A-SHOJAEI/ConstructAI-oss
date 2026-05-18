@@ -180,7 +180,7 @@ ConstructAI is distributed under the **[PolyForm Noncommercial 1.0.0](./LICENSE)
 You may **freely**:
 
 - Use, modify, and run ConstructAI for personal research, learning, or hobby projects
-- Use it within charities, public-research institutions, government, or educational settings
+- Use it within charities, research, or educational settings
 - Fork it, modify it, and redistribute under the same terms
 - Contribute back via pull requests
 
@@ -191,8 +191,6 @@ You **need a commercial license** if your organization uses ConstructAI to:
 - Embed it in a commercial offering
 
 See [COMMERCIAL.md](./COMMERCIAL.md) for how to obtain a commercial license — email **shojaei@vt.edu**.
-
-For-profit organizations get a **60-day evaluation window** under the noncommercial terms before a paid agreement is required.
 
 ---
 
